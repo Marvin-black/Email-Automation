@@ -1,0 +1,85 @@
+import os
+import smtplib
+from email.message import EmailMessage
+from email.utils import formataddr
+from pathlib import Path
+import logging
+import time
+from dotenv import load_dotenv
+from jinja2 import Template
+
+PORT = 587
+EMAIL_SERVER = "smtp.gmail.com"
+
+# Load the environment variables
+current_dir = Path(__file__).resolve().parent if "__file__" in locals() else Path.cwd()
+envars = current_dir / ".env"
+load_dotenv(envars)
+
+# Read environment variables
+sender_email = os.getenv("Email")
+password_email = os.getenv("Password")
+
+# Configure logging
+logging.basicConfig(filename="email_log.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+def send_email(subject, receiver_email, template_path, context):
+    try:
+        # Load email template
+        with open(template_path, "r") as template_file:
+            template_content = template_file.read()
+        
+        # Create Jinja2 template
+        jinja_template = Template(template_content)
+        email_content = jinja_template.render(context)
+
+        # Create the email message
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = formataddr(("Spartan Gear Supps.", f"{sender_email}"))
+        msg["To"] = receiver_email
+        msg["BCC"] = sender_email
+        msg.set_content(email_content)
+
+        # Establish connection with Gmail SMTP server
+        with smtplib.SMTP(EMAIL_SERVER, PORT) as server:
+            server.starttls()
+
+            # Log in to the Gmail account
+            server.login(sender_email, password_email)
+
+            # Send the email
+            server.sendmail(sender_email, receiver_email, msg.as_string())
+
+        logging.info(f"Email sent to {receiver_email} successfully.")
+
+    except Exception as e:
+        logging.error(f"Error sending email to {receiver_email}: {e}")
+
+if __name__ == "__main__":
+    recipients = [
+        {
+            "name": "John Doe",
+            "email": "johndoe@example.com",
+            "due_date": "11, Aug 2022",
+            "invoice_no": "INV-21-009",
+            "amount": "5",
+            "template": "templates/invoice_template.html",
+        },
+        # Add more recipients here
+    ]
+
+    for recipient in recipients:
+        send_email(
+            subject="Invoice Reminder",
+            receiver_email=recipient["email"],
+            template_path=recipient["template"],
+            context={
+                "name": recipient["name"],
+                "due_date": recipient["due_date"],
+                "invoice_no": recipient["invoice_no"],
+                "amount": recipient["amount"]
+            }
+        )
+        # Add a delay between sending emails to avoid rate-limiting
+        time.sleep(5)
